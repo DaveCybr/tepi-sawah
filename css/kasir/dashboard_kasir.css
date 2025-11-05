@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+:root {
+  --blue: #2196F3;
+  --green: #4CAF50;
+  --orange: #FF9800;
+  --purple: #9C27B0;
+  --bg: #f4f6f9;
+  --text: #333;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.topbar {
+  background: white;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar h1 {
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--blue);
+}
+
+.content {
+  padding: 30px 50px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.card i {
+  font-size: 35px;
+}
+
+.card h3 {
+  margin-bottom: 4px;
+}
+
+.card.blue { background: var(--blue); }
+.card.orange { background: var(--orange); }
+.card.green { background: var(--green); }
+.card.purple { background: var(--purple); }
+
+.meja-section h2 {
+  margin-bottom: 15px;
+  color: var(--text);
+}
+
+.meja-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.meja-card {
+  background: white;
+  padding: 20px;
+  border: 3px solid var(--blue);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease;
+}
+
+.meja-card:hover {
+  transform: translateY(-4px);
+}
+
+.meja-card h3 {
+  color: var(--blue);
+  margin-bottom: 10px;
+}
+
+.meja-card p {
+  font-size: 14px;
+  margin-bottom: 5px;
+}
