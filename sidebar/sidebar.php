@@ -1,282 +1,295 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-  session_start();
-}
-if (!isset($_SESSION['nama'])) {
-  $_SESSION['nama'] = "Owner";
-}
-$current = basename($_SERVER['PHP_SELF']);
-?>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<style>
-:root{
-  --blue:#3B82F6;
-  --sidebar-w:240px;
-  --sidebar-w-collapsed:80px;
-  --header-h:60px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
-  background:#f8fafc;
-  color:#0f172a;
-  min-height:100vh;
-  overflow-x:hidden;
-}
-.sidebar{
-  position:fixed;
-  top:0;left:0;
-  height:100vh;
-  width:var(--sidebar-w);
-  background:#fff;
-  border-right:1px solid #e6eefc;
-  box-shadow:2px 0 8px rgba(15,23,42,0.04);
-  display:flex;
-  flex-direction:column;
-  transition:width .25s ease,transform .25s ease;
-  z-index:1000;
-}
-.sidebar.collapsed{width:var(--sidebar-w-collapsed);}
-.sidebar .hero{
-  height:var(--header-h);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 16px;
-  border-bottom:1px solid #f1f5f9;
-}
-.sidebar .hero .title{
-  color:var(--blue);
-  font-weight:600;
-  font-size:16px;
-  transition:opacity .2s ease;
-}
-.sidebar.collapsed .hero .title{opacity:0;pointer-events:none;}
-.sidebar .hero .hamburger{
-  font-size:18px;
-  color:var(--blue);
-  cursor:pointer;
-  background:none;
-  border:none;
-}
-.sidebar .menu{
-  flex:1;
-  padding:8px 0;
-  overflow:auto;
-}
-.sidebar .menu a{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:10px 16px;
-  color:#0f172a;
-  text-decoration:none;
-  border-radius:8px;
-  margin:4px 8px;
-  transition:.2s;
-}
-.sidebar .menu a:hover{
-  background:#eef6ff;
-  color:var(--blue);
-}
-.sidebar .menu a.active{
-  background:#eef6ff !important;
-  color:var(--blue) !important;
-  border-left:4px solid var(--blue);
-  padding-left:12px;
-  font-weight:600;
-}
-.sidebar.collapsed .menu a span{display:none;}
-.header{
-  position:fixed;
-  top:0;
-  left:var(--sidebar-w);
-  right:0;
-  height:var(--header-h);
-  background:#fff;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 16px;
-  border-bottom:1px solid #eef2ff;
-  box-shadow:0 2px 6px rgba(2,6,23,0.03);
-  z-index:900;
-  transition:left .25s ease;
-}
-.sidebar.collapsed ~ .header{left:var(--sidebar-w-collapsed);}
-.header .left i{
-  color:var(--blue);
-  font-size:18px;
-  cursor:pointer;
-  margin-right:12px;
-}
-.header .right{
-  display:flex;
-  align-items:center;
-  gap:14px;
-  font-size:14px;
-}
-.header .user{display:flex;align-items:center;gap:6px;}
-.main-content{
-  margin-top:var(--header-h);
-  margin-left:var(--sidebar-w);
-  padding:20px;
-  transition:margin-left .25s ease;
-}
-.sidebar.collapsed ~ .main-content{margin-left:var(--sidebar-w-collapsed);}
-.overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.35);
-  z-index:950;
-  display:none;
-}
-.overlay.visible{display:block;}
-@media(min-width:769px){#mobileToggle{display:none;}}
-@media(max-width:1024px){
-  .sidebar{transform:translateX(-100%);width:var(--sidebar-w);}
-  .sidebar.active{transform:translateX(0);}
-  .header{left:0!important;}
-  .main-content{margin-left:0!important;}
+// Pastikan init sudah loaded
+if (!defined('INIT_LOADED')) {
+  die('Direct access not allowed');
 }
 
-/* Popup Logout */
-.logout-popup{
-  position:fixed;
-  top:0;left:0;right:0;bottom:0;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  background:rgba(0,0,0,0.25);
-  z-index:2000;
-}
-.logout-popup.active{display:flex;}
-.logout-box{
-  background:#fff;
-  padding:24px;
-  border-radius:12px;
-  text-align:center;
-  width:300px;
-  box-shadow:0 4px 20px rgba(0,0,0,0.08);
-}
-.logout-box h3{
-  margin-bottom:16px;
-  font-size:16px;
-  color:#0f172a;
-}
-.logout-buttons{
-  display:flex;
-  justify-content:center;
-  gap:12px;
-}
-.logout-buttons button{
-  padding:8px 18px;
-  border:none;
-  border-radius:6px;
-  font-size:14px;
-  cursor:pointer;
-}
-.logout-yes{background:var(--blue);color:#fff;}
-.logout-no{background:#e2e8f0;color:#0f172a;}
-.logout-no:hover{background:#cbd5e1;}
-.logout-yes:hover{background:#2563eb;}
+$current_page = basename($_SERVER['PHP_SELF']);
+?>
+<style>
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: white;
+    padding: 20px 0;
+    z-index: 1000;
+    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+  }
+
+  .sidebar-header {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 20px;
+  }
+
+  .sidebar-header h2 {
+    font-size: 20px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-header p {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  .sidebar-user {
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0 15px 20px;
+    border-radius: 10px;
+  }
+
+  .sidebar-user .user-name {
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+
+  .sidebar-user .user-role {
+    font-size: 12px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    color: #fbbf24;
+  }
+
+  .sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .menu-item {
+    margin-bottom: 5px;
+  }
+
+  .menu-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .menu-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  .menu-link.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-left: 3px solid #3b82f6;
+  }
+
+  .menu-link i {
+    width: 20px;
+    text-align: center;
+  }
+
+  .menu-section {
+    padding: 15px 20px 5px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.5;
+    font-weight: 600;
+  }
+
+  .sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+
+  .logout-btn:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: white;
+  }
+
+  /* Mobile Toggle */
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1001;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 1024px) {
+    .sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.3s;
+    }
+
+    .sidebar.mobile-active {
+      transform: translateX(0);
+    }
+
+    .sidebar-toggle {
+      display: block;
+    }
+  }
 </style>
 
-<nav class="sidebar" id="sidebar">
-  <div class="hero">
-    <div class="title">Resto Owner</div>
-    <button class="hamburger" id="heroToggle"><i class="fa-solid fa-bars"></i></button>
-  </div>
-  <div class="menu">
-    <a href="dashboard.php" class="<?= str_contains($current, 'dashboard') ? 'active' : '' ?>"><i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span></a>
-    <a href="../inside/tambah_menu.php" class="<?= str_contains($current, 'tambah_menu') ? 'active' : '' ?>"><i class="fa-solid fa-square-plus"></i><span>Menu</span></a>
-    <a href="../inside/manajemen_meja.php" class="<?= str_contains($current, 'manajemen_meja') ? 'active' : '' ?>"><i class="fa-solid fa-table-cells"></i><span>Meja</span></a>
-    <hr style="margin:8px 0;border:none;border-top:1px solid #f1f5f9;">
-    <a href="../inside/tambah_meja.php" class="<?= str_contains($current, 'tambah_meja') ? 'active' : '' ?>"><i class="fa-solid fa-square-plus"></i><span>Input Meja</span></a>
-    <a href="pembelian_bahan.php" class="<?= str_contains($current, 'pembelian_bahan') ? 'active' : '' ?>"><i class="fa-solid fa-file-circle-plus"></i><span>Input Pembelian Bahan</span></a>
-    <hr style="margin:8px 0;border:none;border-top:1px solid #f1f5f9;">
-    <a href="laporan_penjualan.php" class="<?= str_contains($current, 'laporan_penjualan') ? 'active' : '' ?>"><i class="fa-solid fa-chart-line"></i><span>Laporan</span></a>
-  </div>
-</nav>
+<button class="sidebar-toggle" onclick="toggleSidebar()">
+  <i class="fas fa-bars"></i>
+</button>
 
-<div class="overlay" id="overlay"></div>
-
-<header class="header" id="header">
-  <div class="left">
-    <i class="fa-solid fa-bars" id="mobileToggle"></i>
-    <i class="fa-solid fa-bell" title="Notifikasi"></i>
-    <i class="fa-solid fa-right-from-bracket" title="Logout" id="logoutBtn"></i>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h2>
+      <i class="fas fa-utensils"></i>
+      <?= APP_NAME ?>
+    </h2>
+    <p>Owner Dashboard</p>
   </div>
-  <div class="right">
-    <div id="datetime"></div>
-    <div class="user"><i class="fa-solid fa-user"></i> <?php echo htmlspecialchars($_SESSION['nama']); ?></div>
-  </div>
-</header>
 
-<!-- Popup Logout -->
-<div class="logout-popup" id="logoutPopup">
-  <div class="logout-box">
-    <h3>Yakin ingin logout?</h3>
-    <div class="logout-buttons">
-      <button class="logout-no" id="cancelLogout">No</button>
-      <button class="logout-yes" id="confirmLogout">Yes</button>
-    </div>
+  <div class="sidebar-user">
+    <div class="user-name"><?= htmlspecialchars($_SESSION['nama']) ?></div>
+    <div class="user-role">👑 Owner</div>
+  </div>
+
+  <ul class="sidebar-menu">
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/dashboard.php"
+        class="menu-link <?= $current_page === 'dashboard.php' ? 'active' : '' ?>">
+        <i class="fas fa-home"></i>
+        <span>Dashboard</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Management</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/manage_users.php"
+        class="menu-link <?= $current_page === 'manage_users.php' ? 'active' : '' ?>">
+        <i class="fas fa-users"></i>
+        <span>Manage Users</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/meja.php"
+        class="menu-link <?= $current_page === 'meja.php' ? 'active' : '' ?>">
+        <i class="fas fa-table-cells"></i>
+        <span>Meja</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/menu.php"
+        class="menu-link <?= $current_page === 'menu.php' ? 'active' : '' ?>">
+        <i class="fas fa-utensils"></i>
+        <span>Menu</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Pesanan</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/pesanan_aktif.php"
+        class="menu-link <?= $current_page === 'pesanan_aktif.php' ? 'active' : '' ?>">
+        <i class="fas fa-list-check"></i>
+        <span>Pesanan Aktif</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/pemesanan.php"
+        class="menu-link <?= $current_page === 'pemesanan.php' ? 'active' : '' ?>">
+        <i class="fas fa-clipboard-list"></i>
+        <span>Riwayat Pesanan</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Laporan</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/pembayaran.php"
+        class="menu-link <?= $current_page === 'pembayaran.php' ? 'active' : '' ?>">
+        <i class="fas fa-receipt"></i>
+        <span>Pembayaran</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/transaksi_harian.php"
+        class="menu-link <?= $current_page === 'transaksi_harian.php' ? 'active' : '' ?>">
+        <i class="fas fa-chart-line"></i>
+        <span>Transaksi Harian</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/owner/inside/laporan.php"
+        class="menu-link <?= $current_page === 'laporan.php' ? 'active' : '' ?>">
+        <i class="fas fa-file-alt"></i>
+        <span>Laporan</span>
+      </a>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <form method="POST" action="<?= APP_URL ?>/logout.php">
+      <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
+      <button type="submit" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </button>
+    </form>
   </div>
 </div>
 
 <script>
-const sidebar=document.getElementById('sidebar');
-const heroToggle=document.getElementById('heroToggle');
-const mobileToggle=document.getElementById('mobileToggle');
-const overlay=document.getElementById('overlay');
-const title=sidebar.querySelector('.hero .title');
-const logoutBtn=document.getElementById('logoutBtn');
-const logoutPopup=document.getElementById('logoutPopup');
-const cancelLogout=document.getElementById('cancelLogout');
-const confirmLogout=document.getElementById('confirmLogout');
-
-function isMobile(){return window.innerWidth<=1024;}
-function toggleSidebar(){
-  if(isMobile()){
-    sidebar.classList.toggle('active');
-    const isActive=sidebar.classList.contains('active');
-    overlay.classList.toggle('visible',isActive);
-    title.style.display='block';
-  }else{
-    sidebar.classList.toggle('collapsed');
-    const collapsed=sidebar.classList.contains('collapsed');
-    title.style.display=collapsed?'none':'block';
-    heroToggle.style.marginLeft=collapsed?'0':'auto';
-    heroToggle.style.marginRight=collapsed?'auto':'0';
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-active');
   }
-}
-heroToggle.addEventListener('click',toggleSidebar);
-if(mobileToggle)mobileToggle.addEventListener('click',toggleSidebar);
-overlay.addEventListener('click',()=>{
-  sidebar.classList.remove('active');
-  overlay.classList.remove('visible');
-  if(isMobile()){title.style.display='block';}
-});
-window.addEventListener('resize',()=>{
-  if(!isMobile()){
-    sidebar.classList.remove('active');
-    overlay.classList.remove('visible');
-    title.style.display=sidebar.classList.contains('collapsed')?'none':'block';
-  }else{title.style.display='block';}
-});
-function updateDateTime(){
-  const now=new Date();
-  const days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-  const day=days[now.getDay()];
-  const time=now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('datetime').textContent=`${day}, ${time}`;
-}
-updateDateTime();
-setInterval(updateDateTime,1000);
 
-logoutBtn.addEventListener('click',()=>{logoutPopup.classList.add('active');});
-cancelLogout.addEventListener('click',()=>{logoutPopup.classList.remove('active');});
-confirmLogout.addEventListener('click',()=>{
-  window.location.href='../include/logout.php';
-});
+  // Close sidebar when clicking outside on mobile
+  document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.querySelector('.sidebar-toggle');
+
+    if (window.innerWidth <= 1024) {
+      if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {
+        sidebar.classList.remove('mobile-active');
+      }
+    }
+  });
 </script>

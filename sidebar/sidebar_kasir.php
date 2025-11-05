@@ -1,230 +1,278 @@
 <?php
-  // Ambil nama file aktif
-  $current = basename($_SERVER['PHP_SELF']);
+// Pastikan init sudah loaded
+if (!defined('INIT_LOADED')) {
+  die('Direct access not allowed');
+}
+
+$current_page = basename($_SERVER['PHP_SELF']);
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sidebar</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+<style>
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: white;
+    padding: 20px 0;
+    z-index: 1000;
+    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+  }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: 'Poppins', sans-serif;
-    }
+  .sidebar-header {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 20px;
+  }
 
-    body {
-      background: #f8f9fb;
-      overflow-x: hidden;
-    }
+  .sidebar-header h2 {
+    font-size: 20px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-    /* ===== SIDEBAR ===== */
+  .sidebar-header p {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  .sidebar-user {
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    margin: 0 15px 20px;
+    border-radius: 10px;
+  }
+
+  .sidebar-user .user-name {
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+
+  .sidebar-user .user-role {
+    font-size: 12px;
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+
+  .sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .menu-item {
+    margin-bottom: 5px;
+  }
+
+  .menu-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .menu-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  .menu-link.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-left: 3px solid #3b82f6;
+  }
+
+  .menu-link i {
+    width: 20px;
+    text-align: center;
+  }
+
+  .menu-section {
+    padding: 15px 20px 5px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.5;
+    font-weight: 600;
+  }
+
+  .sidebar-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+
+  .logout-btn:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: white;
+  }
+
+  /* Mobile Toggle */
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1001;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 1024px) {
     .sidebar {
-      width: 260px;
-      background: #fff;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      transition: all 0.3s ease;
-      overflow-y: auto;
+      transform: translateX(-100%);
+      transition: transform 0.3s;
     }
 
-    .sidebar.collapsed {
-      width: 85px;
+    .sidebar.mobile-active {
+      transform: translateX(0);
     }
 
-    .sidebar-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 1.8rem 1.2rem 0.8rem;
-      border-bottom: 1px solid #eee;
+    .sidebar-toggle {
+      display: block;
     }
+  }
+</style>
 
-    .sidebar-header .title h2 {
-      font-size: 1rem;
-      color: #ff9f00;
-      font-weight: 600;
-      line-height: 1.2;
-    }
+<button class="sidebar-toggle" onclick="toggleSidebar()">
+  <i class="fas fa-bars"></i>
+</button>
 
-    .sidebar-header .title span {
-      color: #000;
-    }
-
-    .sidebar-header .title p {
-      font-size: 0.75rem;
-      color: gray;
-    }
-
-    #toggle-btn {
-      background: none;
-      border: none;
-      font-size: 1.3rem;
-      cursor: pointer;
-      color: #444;
-      transition: transform 0.3s ease, color 0.3s ease;
-    }
-
-    #toggle-btn:hover {
-      color: #ff9f00;
-      transform: scale(1.2);
-    }
-
-    /* ===== MENU ===== */
-    .menu {
-      display: flex;
-      flex-direction: column;
-      padding-top: 1rem;
-    }
-
-    .menu a {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 12px 16px;
-      color: #333;
-      text-decoration: none;
-      border-radius: 10px;
-      margin: 4px 8px;
-      transition: all 0.3s ease;
-    }
-
-    .menu a:hover {
-      background: rgba(255, 159, 0, 0.15);
-    }
-
-    /* ===== AKTIF ===== */
-    .menu a.active {
-      background: #ff9f00;
-      color: #fff;
-      font-weight: 600;
-    }
-
-    .menu a.active i {
-      color: #fff;
-    }
-
-    /* ===== FOOTER ===== */
-    .menu-footer {
-      margin-top: auto;
-      padding: 5px 0 8px;
-      background: #fff;
-      border-top: 1px solid #eee;
-    }
-
-    .logout-divider {
-      border: none;
-      border-top: 2px solid #000;
-      margin: 8px 16px;
-    }
-
-    .logout-item {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 12px 16px;
-      cursor: pointer;
-      color: #e74c3c;
-      font-weight: 500;
-      border-radius: 10px;
-      transition: all 0.3s ease;
-      margin: 0 8px;
-    }
-
-    .logout-item:hover {
-      background: rgba(255, 159, 0, 0.15);
-    }
-
-    /* ===== SAAT COLLAPSE ===== */
-    .sidebar.collapsed .title,
-    .sidebar.collapsed span {
-      display: none;
-    }
-
-    .sidebar.collapsed .logout-item span {
-      display: none;
-    }
-
-    .sidebar.collapsed .menu a {
-      justify-content: center;
-    }
-
-    .sidebar.collapsed .logout-item {
-      justify-content: center;
-    }
-  </style>
-</head>
-<body>
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="title">
-        <h2>Resto<span>Cashier</span></h2>
-        <p>Kasir Dashboard</p>
-      </div>
-      <button id="toggle-btn"><i class="fa-solid fa-angles-left"></i></button>
-    </div>
-
-    <div class="menu">
-      <a href="dashboard_kasir.php" class="<?= str_contains($current, 'dashboard_kasir') ? 'active' : '' ?>">
-        <i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span>
-      </a>
-
-      <a href="input_pesanan.php" class="<?= str_contains($current, 'input_pesanan') ? 'active' : '' ?>">
-        <i class="fa-solid fa-plus-circle"></i><span>Input Pesanan</span>
-      </a>
-
-      <a href="pesanan_aktif.php" class="<?= str_contains($current, 'pesanan_aktif') ? 'active' : '' ?>">
-        <i class="fa-solid fa-list"></i><span>Pesanan Aktif</span>
-      </a>
-
-      <a href="meja.php" class="<?= str_contains($current, 'meja') ? 'active' : '' ?>">
-        <i class="fa-solid fa-table-cells"></i><span>Meja</span>
-      </a>
-
-      <a href="menu.php" class="<?= str_contains($current, 'menu') ? 'active' : '' ?>">
-        <i class="fa-solid fa-utensils"></i><span>Menu</span>
-      </a>
-
-      <a href="pembayaran.php" class="<?= str_contains($current, 'pembayaran') ? 'active' : '' ?>">
-        <i class="fa-solid fa-credit-card"></i><span>Pembayaran</span>
-      </a>
-
-      <a href="transaksi_harian.php" class="<?= str_contains($current, 'transaksi_harian') ? 'active' : '' ?>">
-        <i class="fa-solid fa-chart-line"></i><span>Transaksi Harian</span>
-      </a>
-
-      <a href="pembatalan.php" class="<?= str_contains($current, 'pembatalan') ? 'active' : '' ?>">
-        <i class="fa-solid fa-xmark-circle"></i><span>Pembatalan</span>
-      </a>
-    </div>
-
-    <div class="menu-footer">
-      <hr class="logout-divider">
-      <div class="logout-item">
-        <i class="fa-solid fa-right-from-bracket"></i><span>Logout</span>
-      </div>
-    </div>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h2>
+      <i class="fas fa-utensils"></i>
+      <?= APP_NAME ?>
+    </h2>
+    <p>Kasir Dashboard</p>
   </div>
 
-<script>
-  const sidebar = document.querySelector('.sidebar');
-  const topbar = document.querySelector('.topbar');
-  const main = document.querySelector('.main-content');
-  const toggleBtn = document.querySelector('#toggle-btn');
+  <div class="sidebar-user">
+    <div class="user-name"><?= htmlspecialchars($_SESSION['nama']) ?></div>
+    <div class="user-role">Kasir</div>
+  </div>
 
-  toggleBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
-    topbar.classList.toggle('collapsed');
-    main.classList.toggle('collapsed');
+  <ul class="sidebar-menu">
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/dashboard_kasir.php"
+        class="menu-link <?= $current_page === 'dashboard_kasir.php' ? 'active' : '' ?>">
+        <i class="fas fa-home"></i>
+        <span>Dashboard</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Pesanan</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/input_pesanan.php"
+        class="menu-link <?= $current_page === 'input_pesanan.php' ? 'active' : '' ?>">
+        <i class="fas fa-plus-circle"></i>
+        <span>Input Pesanan</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/pesanan_aktif.php"
+        class="menu-link <?= $current_page === 'pesanan_aktif.php' ? 'active' : '' ?>">
+        <i class="fas fa-list-check"></i>
+        <span>Pesanan Aktif</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Pembayaran</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/pembayaran.php"
+        class="menu-link <?= $current_page === 'pembayaran.php' ? 'active' : '' ?>">
+        <i class="fas fa-cash-register"></i>
+        <span>Pembayaran</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/transaksi_harian.php"
+        class="menu-link <?= $current_page === 'transaksi_harian.php' ? 'active' : '' ?>">
+        <i class="fas fa-receipt"></i>
+        <span>Transaksi Harian</span>
+      </a>
+    </li>
+
+    <div class="menu-section">Lainnya</div>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/meja.php"
+        class="menu-link <?= $current_page === 'meja.php' ? 'active' : '' ?>">
+        <i class="fas fa-table-cells"></i>
+        <span>Status Meja</span>
+      </a>
+    </li>
+
+    <li class="menu-item">
+      <a href="<?= APP_URL ?>/kasir/reset_meja.php"
+        class="menu-link <?= $current_page === 'reset_meja.php' ? 'active' : '' ?>">
+        <i class="fas fa-broom"></i>
+        <span>Reset Meja</span>
+      </a>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <form method="POST" action="<?= APP_URL ?>/logout.php">
+      <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
+      <button type="submit" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-active');
+  }
+
+  // Close sidebar when clicking outside on mobile
+  document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.querySelector('.sidebar-toggle');
+
+    if (window.innerWidth <= 1024) {
+      if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {
+        sidebar.classList.remove('mobile-active');
+      }
+    }
   });
 </script>
-</body>
-</html>

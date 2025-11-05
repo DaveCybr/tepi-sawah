@@ -1,250 +1,408 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-require_once '../database/connect.php';
-include '../sidebar/sidebar_kasir.php';
+require_once '../includes/init.php';
+requireKasir();
 
-// === 1. Meja aktif (jumlah meja terdaftar) ===
-$q1 = $conn->query("SELECT COUNT(*) AS total FROM meja");
-$meja_aktif = $q1->fetch_assoc()['total'];
+require_once '../models/Meja.php';
+require_once '../models/Pesanan.php';
+require_once '../models/Pembayaran.php';
 
-// === 2. Pesanan aktif (detail pesanan yang belum selesai) ===
-$q2 = $conn->query("
-    SELECT COUNT(*) AS total 
-    FROM detail_pesanan dp
-    JOIN pesanan p ON dp.id_pesanan = p.id_pesanan
-    WHERE p.status_pesanan NOT IN ('selesai','dibayar','dibatalkan')
-");
-$pesanan_aktif = $q2->fetch_assoc()['total'];
+$mejaModel = new Meja();
+$pesananModel = new Pesanan();
+$pembayaranModel = new Pembayaran();
 
-// === 3. Pendapatan hari ini (laporan transaksi penjualan hari ini) ===
-$q3 = $conn->query("
-    SELECT COALESCE(SUM(nominal), 0) AS total
-    FROM laporan_transaksi
-    WHERE jenis = 'penjualan'
-      AND DATE(waktu_transaksi) = CURDATE()
-");
-$pendapatan_hari_ini = number_format($q3->fetch_assoc()['total'], 0, ',', '.');
+// Get statistics
+$statMeja = $mejaModel->getStatistik();
+$statPesanan = $pesananModel->getStatistik();
+$statPembayaran = $pembayaranModel->getStatistik();
 
-// === 4. Pesanan selesai ===
-$q4 = $conn->query("
-    SELECT COUNT(*) AS total
-    FROM pesanan
-    WHERE status_pesanan IN ('selesai','dibayar')
-");
-$pesanan_selesai = $q4->fetch_assoc()['total'];
-
-// === Data semua meja untuk tampilan grid ===
-$meja = $conn->query("SELECT * FROM meja ORDER BY nomor_meja ASC")->fetch_all(MYSQLI_ASSOC);
+// Get meja dengan detail
+$mejaTerisi = $mejaModel->getTerisiWithPesanan();
+$mejaKosong = $mejaModel->getKosong();
 ?>
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Meja</title>
-<style>
-    body {
-        font-family: 'Segoe UI', sans-serif;
-        margin: 0;
-        padding: 0;
-        background-color: #f9fafb;
-        display: flex;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Kasir - <?= APP_NAME ?></title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    main {
-        flex: 1;
-        padding: 25px;
-        background: #f9fafb;
-        transition: margin-left 0.3s ease;
-        margin-left: 250px; /* mengikuti sidebar */
-    }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+        }
 
-    body.sidebar-collapsed main {
-        margin-left: 80px;
-    }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            margin-left: 260px;
+        }
 
-    /* ======== Statistik ======== */
-    .stats-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-    .stat-card {
-        background: #fff;
-        border-radius: 16px;
-        padding: 22px;
-        position: relative;
-        box-shadow: 0 1px 6px rgba(0,0,0,0.1);
-    }
-    .stat-card h3 {
-        color: #374151;
-        font-size: 0.95rem;
-        margin: 0;
-    }
-    .stat-card p {
-        margin: 10px 0 0;
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: #111827;
-    }
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        }
 
-    .icon {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        width: 35px;
-        height: 35px;
-        border-radius: 10px;
-        background-size: 60%;
-        background-repeat: no-repeat;
-        background-position: center;
-        opacity: 0.9;
-    }
-    .icon.user { background: #e0f2fe url('https://cdn-icons-png.flaticon.com/512/847/847969.png'); }
-    .icon.cart { background: #fef3c7 url('https://cdn-icons-png.flaticon.com/512/1170/1170678.png'); }
-    .icon.money { background: #dcfce7 url('https://cdn-icons-png.flaticon.com/512/483/483947.png'); }
-    .icon.done { background: #ede9fe url('https://cdn-icons-png.flaticon.com/512/1828/1828640.png'); }
+        .page-header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
 
-    /* ======== Grid Meja ======== */
-    .meja-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
-    }
+        .page-header p {
+            opacity: 0.9;
+        }
 
-    .meja-card {
-        background: #fff;
-        border-radius: 15px;
-        padding: 25px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        border: 2px solid transparent;
-    }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
 
-    .meja-card:hover {
-        transform: translateY(-5px);
-    }
+        .quick-btn {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            text-decoration: none;
+            color: #1e293b;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
 
-    .circle {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: 2px solid currentColor;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        margin: 0 auto 10px;
-        font-size: 1.2rem;
-    }
+        .quick-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: #3b82f6;
+        }
 
-    .kosong { border-color: #22c55e; color: #16a34a; }
-    .terisi { border-color: #facc15; color: #ca8a04; }
-    .menunggu_pembayaran { border-color: #f97316; color: #c2410c; }
-    .selesai { border-color: #9ca3af; color: #6b7280; }
+        .quick-btn i {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #3b82f6;
+        }
 
-    .meja-card h4 { margin: 8px 0 2px; color: inherit; font-size: 1.1rem; }
-    .status { font-weight: bold; color: inherit; margin-bottom: 8px; }
-    .info { color: #6b7280; font-size: 0.9rem; margin: 4px 0; }
-    .harga { color: #111827; font-weight: bold; margin-bottom: 8px; }
+        .quick-btn.success i {
+            color: #10b981;
+        }
 
-    .qris {
-        background: #2563eb;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 12px;
-        cursor: pointer;
-        font-size: 0.85rem;
-    }
-    .bayar {
-        background: #16a34a;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 12px;
-        cursor: pointer;
-        font-size: 0.85rem;
-        margin-top: 6px;
-    }
+        .quick-btn.warning i {
+            color: #f59e0b;
+        }
 
-    @media (max-width: 768px) {
-        main { margin-left: 0; padding: 15px; }
-    }
-</style>
-</head>
-<body>
-<main>
-    <div class="stats-container">
-        <div class="stat-card">
-            <div class="icon user"></div>
-            <h3>Meja Aktif</h3>
-            <p><?= $meja_aktif ?></p>
-        </div>
-        <div class="stat-card">
-            <div class="icon cart"></div>
-            <h3>Pesanan Aktif</h3>
-            <p><?= $pesanan_aktif ?></p>
-        </div>
-        <div class="stat-card">
-            <div class="icon money"></div>
-            <h3>Pendapatan Hari Ini</h3>
-            <p>Rp <?= $pendapatan_hari_ini ?></p>
-        </div>
-        <div class="stat-card">
-            <div class="icon done"></div>
-            <h3>Pesanan Selesai</h3>
-            <p><?= $pesanan_selesai ?></p>
-        </div>
-    </div>
+        .quick-btn.danger i {
+            color: #ef4444;
+        }
 
-    <div class="meja-grid">
-        <?php for ($i = 1; $i <= 12; $i++): 
-            $m = $meja[$i-1] ?? ['nomor_meja'=>"M$i",'status_meja'=>'kosong'];
-            $status = $m['status_meja'];
-            $status_text = ucwords(str_replace('_',' ', $status));
-        ?>
-        <div class="meja-card <?= $status ?>">
-            <div class="circle"><?= $i ?></div>
-            <h4>Meja <?= htmlspecialchars($m['nomor_meja']) ?></h4>
-            <p class="status"><?= $status_text ?></p>
-            <p class="info">👥 <?= rand(1,4) ?> orang</p>
-            <p class="harga">Rp <?= number_format(rand(100000,300000),0,',','.') ?></p>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
 
-            <?php if($status == 'menunggu_pembayaran'): ?>
-                <button class="qris">QRIS</button>
-                <button class="bayar">Sudah Bayar</button>
-            <?php endif; ?>
-        </div>
-        <?php endfor; ?>
-    </div>
-</main>
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid #e2e8f0;
+        }
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const toggle = document.querySelector('#sidebarToggle');
-    const sidebar = document.querySelector('.sidebar'); // pastikan sidebar kamu punya class "sidebar"
-    const main = document.querySelector('main');
+        .stat-card.blue {
+            border-left-color: #3b82f6;
+        }
 
-    if (toggle && sidebar && main) {
-        toggle.addEventListener('click', () => {
-            // toggle kelas collapse
-            sidebar.classList.toggle('collapsed');
+        .stat-card.green {
+            border-left-color: #10b981;
+        }
 
-            if (sidebar.classList.contains('collapsed')) {
-                // sidebar disembunyikan, konten jadi full
-                main.style.marginLeft = '0';
-            } else {
-                // sidebar dibuka lagi, konten geser ke kanan
-                main.style.marginLeft = '250px';
+        .stat-card.orange {
+            border-left-color: #f59e0b;
+        }
+
+        .stat-card.purple {
+            border-left-color: #8b5cf6;
+        }
+
+        .stat-card h4 {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .stat-card .subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 8px;
+        }
+
+        .section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .meja-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .meja-card {
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .meja-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .meja-card.kosong {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+
+        .meja-card.terisi {
+            background: #fef3c7;
+            border-color: #fcd34d;
+        }
+
+        .meja-card.menunggu_pembayaran {
+            background: #fee2e2;
+            border-color: #fca5a5;
+        }
+
+        .meja-number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .meja-status {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .meja-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 13px;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                margin-left: 0;
             }
-        });
-    }
-});
-</script>
+        }
+    </style>
+</head>
 
+<body>
+    <?php include '../sidebar/sidebar_kasir.php'; ?>
+
+    <div class="container">
+        <div class="page-header">
+            <h1><i class="fas fa-chart-line"></i> Dashboard Kasir</h1>
+            <p>Selamat datang, <?= htmlspecialchars($_SESSION['nama']) ?>! • <?= date('d F Y, H:i') ?></p>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="input_pesanan.php" class="quick-btn success">
+                <i class="fas fa-plus-circle"></i>
+                <h3>Input Pesanan</h3>
+            </a>
+            <a href="pesanan_aktif.php" class="quick-btn">
+                <i class="fas fa-list-check"></i>
+                <h3>Pesanan Aktif</h3>
+            </a>
+            <a href="pembayaran.php" class="quick-btn warning">
+                <i class="fas fa-cash-register"></i>
+                <h3>Pembayaran</h3>
+            </a>
+            <a href="transaksi_harian.php" class="quick-btn danger">
+                <i class="fas fa-receipt"></i>
+                <h3>Transaksi</h3>
+            </a>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card blue">
+                <h4>Total Meja</h4>
+                <div class="value"><?= $statMeja['total_meja'] ?? 0 ?></div>
+                <div class="subtitle">
+                    <?= $statMeja['kosong'] ?? 0 ?> kosong •
+                    <?= $statMeja['terisi'] ?? 0 ?> terisi
+                </div>
+            </div>
+
+            <div class="stat-card orange">
+                <h4>Pesanan Aktif</h4>
+                <div class="value"><?= $statPesanan['menunggu'] + $statPesanan['dimasak'] + $statPesanan['siap_disajikan'] ?></div>
+                <div class="subtitle">
+                    <?= $statPesanan['menunggu'] ?? 0 ?> menunggu •
+                    <?= $statPesanan['dimasak'] ?? 0 ?> dimasak
+                </div>
+            </div>
+
+            <div class="stat-card green">
+                <h4>Pendapatan Hari Ini</h4>
+                <div class="value"><?= rupiah($statPembayaran['total_pendapatan'] ?? 0) ?></div>
+                <div class="subtitle">
+                    <?= $statPembayaran['total_transaksi'] ?? 0 ?> transaksi
+                </div>
+            </div>
+
+            <div class="stat-card purple">
+                <h4>Pesanan Selesai</h4>
+                <div class="value"><?= $statPesanan['selesai'] ?? 0 ?></div>
+                <div class="subtitle">
+                    Hari ini
+                </div>
+            </div>
+        </div>
+
+        <!-- Meja Terisi -->
+        <?php if ($mejaTerisi && $mejaTerisi->num_rows > 0): ?>
+            <div class="section">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <i class="fas fa-table-cells"></i> Meja Terisi
+                    </h3>
+                    <span style="color: #64748b;">
+                        <?= $mejaTerisi->num_rows ?> meja aktif
+                    </span>
+                </div>
+
+                <div class="meja-grid">
+                    <?php while ($meja = $mejaTerisi->fetch_assoc()): ?>
+                        <div class="meja-card terisi" onclick="location.href='pesanan_aktif.php'">
+                            <div class="meja-number"><?= $meja['nomor_meja'] ?></div>
+                            <div class="meja-status">Terisi</div>
+                            <div class="meja-info">
+                                <div style="margin-top: 8px;">
+                                    <i class="fas fa-shopping-bag"></i>
+                                    <?= $meja['jumlah_item'] ?> item
+                                </div>
+                                <div style="margin-top: 5px; font-weight: 600; color: #f59e0b;">
+                                    <?= rupiah($meja['total_harga']) ?>
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    <span style="padding: 4px 8px; background: #fef3c7; border-radius: 12px; font-size: 11px;">
+                                        <?= ucfirst(str_replace('_', ' ', $meja['status_pesanan'])) ?>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Meja Kosong -->
+        <div class="section">
+            <div class="section-header">
+                <h3 class="section-title">
+                    <i class="fas fa-table-cells"></i> Meja Kosong
+                </h3>
+                <span style="color: #64748b;">
+                    <?= $mejaKosong ? $mejaKosong->num_rows : 0 ?> meja tersedia
+                </span>
+            </div>
+
+            <div class="meja-grid">
+                <?php
+                if ($mejaKosong && $mejaKosong->num_rows > 0):
+                    while ($meja = $mejaKosong->fetch_assoc()):
+                ?>
+                        <div class="meja-card kosong">
+                            <div class="meja-number"><?= $meja['nomor_meja'] ?></div>
+                            <div class="meja-status" style="color: #10b981;">Tersedia</div>
+                        </div>
+                    <?php
+                    endwhile;
+                else:
+                    ?>
+                    <p style="color: #94a3b8;">Semua meja sedang terisi</p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto refresh every 30 seconds
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    </script>
 </body>
+
 </html>

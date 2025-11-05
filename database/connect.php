@@ -1,8 +1,8 @@
 <?php
 $host     = "localhost";
-$user     = "root"; 
-$password = ""; 
-$database = "dbresto_app";
+$user     = "root";
+$password = "";
+$database = "tepi_sawah";
 
 $conn = mysqli_connect($host, $user, $password, $database);
 
@@ -11,4 +11,3 @@ if (!$conn) {
 }
 
 // echo "Koneksi berhasil";
-?>
