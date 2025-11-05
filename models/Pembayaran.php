@@ -143,9 +143,9 @@ class Pembayaran
 
         $sql = "SELECT 
                     COUNT(*) as total_transaksi,
-                    COALESCE(SUM(jumlah_dibayar), 0) as total_pendapatan,
-                    COALESCE(SUM(CASE WHEN metode = 'cash' THEN jumlah_dibayar END), 0) as total_cash,
-                    COALESCE(SUM(CASE WHEN metode = 'qris' THEN jumlah_dibayar END), 0) as total_qris,
+                    COALESCE(SUM(jumlah_tagihan), 0) as total_pendapatan,
+                    COALESCE(SUM(CASE WHEN metode = 'cash' THEN jumlah_tagihan END), 0) as total_cash,
+                    COALESCE(SUM(CASE WHEN metode = 'qris' THEN jumlah_tagihan END), 0) as total_qris,
                     COUNT(CASE WHEN metode = 'cash' THEN 1 END) as jumlah_cash,
                     COUNT(CASE WHEN metode = 'qris' THEN 1 END) as jumlah_qris
                 FROM pembayaran

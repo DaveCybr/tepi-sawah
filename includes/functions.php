@@ -3,6 +3,7 @@
 /**
  * Helper Functions
  * Fungsi-fungsi pembantu untuk keamanan dan utility
+ * Version: 2.0.0
  */
 
 /**
@@ -25,7 +26,8 @@ function clean($data)
  */
 function validateEmail($email)
 {
-    return filter_var($email, FILTER_VALIDATE_EMAIL);
+    $email = filter_var($email, FILTER_SANITIZE_EMAIL);
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
 /**
@@ -33,29 +35,45 @@ function validateEmail($email)
  */
 function generateCSRFToken()
 {
-    if (empty($_SESSION['csrf_token'])) {
+    if (empty($_SESSION['csrf_token']) || empty($_SESSION['csrf_token_time'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_time'] = time();
+    } else {
+        // Regenerate token setiap 1 jam
+        if (time() - $_SESSION['csrf_token_time'] > 3600) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            $_SESSION['csrf_token_time'] = time();
+        }
     }
+
     return $_SESSION['csrf_token'];
 }
 
 /**
- * Verify CSRF Token
+ * Verify CSRF Token dengan timing-safe comparison
  */
 function verifyCSRFToken($token)
 {
-    if (!isset($_SESSION['csrf_token'])) {
+    if (!isset($_SESSION['csrf_token']) || empty($token)) {
         return false;
     }
+
+    // Check token expiry (optional - 1 hour)
+    if (isset($_SESSION['csrf_token_time'])) {
+        if (time() - $_SESSION['csrf_token_time'] > 3600) {
+            return false;
+        }
+    }
+
     return hash_equals($_SESSION['csrf_token'], $token);
 }
 
 /**
- * Check if user is logged in
+ * Check if user is logged in dengan standardized session key
  */
 function isLoggedIn()
 {
-    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+    return isset($_SESSION[SESSION_USER_ID]) && !empty($_SESSION[SESSION_USER_ID]);
 }
 
 /**
@@ -63,26 +81,30 @@ function isLoggedIn()
  */
 function hasRole($role)
 {
-    return isset($_SESSION['role']) && $_SESSION['role'] === $role;
+    return isset($_SESSION[SESSION_USER_ROLE]) && $_SESSION[SESSION_USER_ROLE] === $role;
 }
 
 /**
- * Redirect function
+ * Redirect function dengan exit
  */
 function redirect($url)
 {
+    // Prevent header injection
+    $url = str_replace(["\r", "\n"], '', $url);
+
     header("Location: " . $url);
     exit;
 }
 
 /**
- * Flash message
+ * Flash message dengan auto-expire
  */
 function setFlash($type, $message)
 {
     $_SESSION['flash'] = [
         'type' => $type, // success, error, warning, info
-        'message' => $message
+        'message' => clean($message),
+        'time' => time()
     ];
 }
 
@@ -93,6 +115,13 @@ function getFlash()
 {
     if (isset($_SESSION['flash'])) {
         $flash = $_SESSION['flash'];
+
+        // Auto-expire flash message setelah 5 menit
+        if (time() - $flash['time'] > 300) {
+            unset($_SESSION['flash']);
+            return null;
+        }
+
         unset($_SESSION['flash']);
         return $flash;
     }
@@ -110,7 +139,7 @@ function rupiah($angka)
 /**
  * Format tanggal Indonesia
  */
-function tanggalIndo($tanggal)
+function tanggalIndo($tanggal, $includeTime = false)
 {
     $bulan = [
         1 => 'Januari',
@@ -127,91 +156,60 @@ function tanggalIndo($tanggal)
         'Desember'
     ];
 
-    $pecahkan = explode('-', date('Y-m-d', strtotime($tanggal)));
-    return $pecahkan[2] . ' ' . $bulan[(int)$pecahkan[1]] . ' ' . $pecahkan[0];
+    $timestamp = strtotime($tanggal);
+    if ($timestamp === false) {
+        return $tanggal; // Return original jika parsing gagal
+    }
+
+    $pecahkan = explode('-', date('Y-m-d', $timestamp));
+    $result = $pecahkan[2] . ' ' . $bulan[(int)$pecahkan[1]] . ' ' . $pecahkan[0];
+
+    if ($includeTime) {
+        $result .= ' ' . date('H:i', $timestamp);
+    }
+
+    return $result;
 }
 
 /**
- * Upload image dengan validasi
+ * Upload image - DEPRECATED, gunakan FileUploader::uploadImage()
+ * Kept for backward compatibility
  */
 function uploadImage($file, $allowedTypes = null)
 {
-    if ($allowedTypes === null) {
-        $allowedTypes = ALLOWED_IMAGE_TYPES;
+    try {
+        return FileUploader::uploadImage($file);
+    } catch (Exception $e) {
+        throw $e;
     }
-
-    // Validasi error
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception('Upload error: ' . $file['error']);
-    }
-
-    // Validasi ukuran
-    if ($file['size'] > MAX_FILE_SIZE) {
-        throw new Exception('File terlalu besar. Maksimal ' . (MAX_FILE_SIZE / 1024 / 1024) . 'MB');
-    }
-
-    // Validasi tipe file
-    $fileExt = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($fileExt, $allowedTypes)) {
-        throw new Exception('Tipe file tidak diizinkan. Hanya: ' . implode(', ', $allowedTypes));
-    }
-
-    // Validasi MIME type (lebih secure)
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mimeType = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
-
-    $allowedMimes = [
-        'jpg' => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png' => 'image/png',
-        'webp' => 'image/webp'
-    ];
-
-    if (!isset($allowedMimes[$fileExt]) || $allowedMimes[$fileExt] !== $mimeType) {
-        throw new Exception('File tidak valid');
-    }
-
-    // Generate unique filename
-    $newFilename = uniqid() . '_' . time() . '.' . $fileExt;
-    $destination = UPLOAD_PATH . $newFilename;
-
-    // Pindahkan file
-    if (!move_uploaded_file($file['tmp_name'], $destination)) {
-        throw new Exception('Gagal mengupload file');
-    }
-
-    return $newFilename;
 }
 
 /**
- * Delete file
+ * Delete file - DEPRECATED, gunakan FileUploader::deleteFile()
  */
 function deleteFile($filename)
 {
-    $filepath = UPLOAD_PATH . $filename;
-    if (file_exists($filepath)) {
-        return unlink($filepath);
-    }
-    return false;
+    return FileUploader::deleteFile($filename);
 }
 
 /**
- * Log activity
+ * Log activity ke database
  */
 function logActivity($userId, $action, $description = '')
 {
     try {
         $db = Database::getInstance();
-        $sql = "INSERT INTO activity_log (user_id, action, description, ip_address, user_agent) 
-                VALUES (?, ?, ?, ?, ?)";
+
+        // Pastikan tabel activity_log ada
+        $sql = "INSERT INTO activity_log (user_id, action, description, ip_address, user_agent, created_at) 
+                VALUES (?, ?, ?, ?, ?, NOW())";
 
         $db->execute($sql, 'issss', [
             $userId,
-            $action,
-            $description,
+            substr($action, 0, 50),
+            substr($description, 0, 255),
             $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0',
-            $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
+            substr($_SERVER['HTTP_USER_AGENT'] ?? 'Unknown', 0, 255)
         ]);
     } catch (Exception $e) {
         // Silent fail - jangan break aplikasi jika logging gagal
@@ -232,20 +230,18 @@ function generateRandomString($length = 10)
  */
 function checkSessionTimeout()
 {
-    if (isset($_SESSION['last_activity'])) {
-        $elapsed = time() - $_SESSION['last_activity'];
+    if (isset($_SESSION[SESSION_LAST_ACTIVITY])) {
+        $elapsed = time() - $_SESSION[SESSION_LAST_ACTIVITY];
         if ($elapsed > SESSION_LIFETIME) {
-            session_unset();
-            session_destroy();
             return false;
         }
     }
-    $_SESSION['last_activity'] = time();
+    $_SESSION[SESSION_LAST_ACTIVITY] = time();
     return true;
 }
 
 /**
- * Rate limiting untuk login
+ * Rate limiting untuk login dengan improved algorithm
  */
 function checkLoginAttempts($identifier)
 {
@@ -263,14 +259,17 @@ function checkLoginAttempts($identifier)
         }
     }
 
+    // Hash identifier untuk privacy
+    $key = hash('sha256', $identifier);
+
     // Check attempts
-    if (isset($attempts[$identifier])) {
-        if ($attempts[$identifier]['count'] >= MAX_LOGIN_ATTEMPTS) {
-            $timeLeft = LOCKOUT_TIME - ($currentTime - $attempts[$identifier]['time']);
+    if (isset($attempts[$key])) {
+        if ($attempts[$key]['count'] >= MAX_LOGIN_ATTEMPTS) {
+            $timeLeft = LOCKOUT_TIME - ($currentTime - $attempts[$key]['time']);
             if ($timeLeft > 0) {
                 throw new Exception('Terlalu banyak percobaan login. Coba lagi dalam ' . ceil($timeLeft / 60) . ' menit.');
             } else {
-                unset($attempts[$identifier]);
+                unset($attempts[$key]);
             }
         }
     }
@@ -287,43 +286,54 @@ function recordLoginAttempt($identifier, $success = false)
         $_SESSION['login_attempts'] = [];
     }
 
+    $key = hash('sha256', $identifier);
+
     if ($success) {
         // Reset attempts jika berhasil
-        unset($_SESSION['login_attempts'][$identifier]);
+        unset($_SESSION['login_attempts'][$key]);
     } else {
         // Tambah attempt jika gagal
-        if (!isset($_SESSION['login_attempts'][$identifier])) {
-            $_SESSION['login_attempts'][$identifier] = [
+        if (!isset($_SESSION['login_attempts'][$key])) {
+            $_SESSION['login_attempts'][$key] = [
                 'count' => 0,
                 'time' => time()
             ];
         }
-        $_SESSION['login_attempts'][$identifier]['count']++;
-        $_SESSION['login_attempts'][$identifier]['time'] = time();
+        $_SESSION['login_attempts'][$key]['count']++;
+        $_SESSION['login_attempts'][$key]['time'] = time();
     }
 }
 
 /**
- * JSON response helper
+ * JSON response helper dengan proper HTTP status codes
  */
-function jsonResponse($success, $message, $data = null)
+function jsonResponse($success, $message, $data = null, $httpCode = null)
 {
+    // Set HTTP status code
+    if ($httpCode !== null) {
+        http_response_code($httpCode);
+    } elseif (!$success) {
+        http_response_code(400);
+    }
+
     header('Content-Type: application/json');
     echo json_encode([
         'success' => $success,
         'message' => $message,
         'data' => $data
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 /**
- * Pagination helper
+ * Pagination helper dengan improved calculation
  */
 function paginate($totalRows, $currentPage = 1, $perPage = ITEMS_PER_PAGE)
 {
-    $totalPages = ceil($totalRows / $perPage);
-    $currentPage = max(1, min($currentPage, $totalPages));
+    $totalRows = max(0, (int)$totalRows);
+    $perPage = max(1, (int)$perPage);
+    $totalPages = ($totalRows > 0) ? ceil($totalRows / $perPage) : 1;
+    $currentPage = max(1, min((int)$currentPage, $totalPages));
     $offset = ($currentPage - 1) * $perPage;
 
     return [
@@ -333,6 +343,82 @@ function paginate($totalRows, $currentPage = 1, $perPage = ITEMS_PER_PAGE)
         'per_page' => $perPage,
         'offset' => $offset,
         'has_prev' => $currentPage > 1,
-        'has_next' => $currentPage < $totalPages
+        'has_next' => $currentPage < $totalPages,
+        'prev_page' => ($currentPage > 1) ? $currentPage - 1 : null,
+        'next_page' => ($currentPage < $totalPages) ? $currentPage + 1 : null
     ];
+}
+
+/**
+ * Format file size
+ */
+function formatFileSize($bytes)
+{
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $bytes = max($bytes, 0);
+    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow = min($pow, count($units) - 1);
+    $bytes /= (1 << (10 * $pow));
+
+    return round($bytes, 2) . ' ' . $units[$pow];
+}
+
+/**
+ * Generate unique code (untuk meja, pesanan, dll)
+ */
+function generateUniqueCode($prefix = '', $length = 8)
+{
+    $code = $prefix . strtoupper(substr(uniqid(), -$length));
+    return $code;
+}
+
+/**
+ * Calculate time ago (untuk display)
+ */
+function timeAgo($datetime)
+{
+    $timestamp = strtotime($datetime);
+    if ($timestamp === false) {
+        return $datetime;
+    }
+
+    $diff = time() - $timestamp;
+
+    if ($diff < 60) {
+        return 'Baru saja';
+    } elseif ($diff < 3600) {
+        return floor($diff / 60) . ' menit lalu';
+    } elseif ($diff < 86400) {
+        return floor($diff / 3600) . ' jam lalu';
+    } elseif ($diff < 604800) {
+        return floor($diff / 86400) . ' hari lalu';
+    } else {
+        return date('d/m/Y', $timestamp);
+    }
+}
+
+/**
+ * Truncate text with ellipsis
+ */
+function truncate($text, $length = 100, $suffix = '...')
+{
+    if (mb_strlen($text) <= $length) {
+        return $text;
+    }
+    return mb_substr($text, 0, $length) . $suffix;
+}
+
+/**
+ * Debug helper (hanya untuk development)
+ */
+function dd(...$vars)
+{
+    if (APP_ENV !== 'production') {
+        echo '<pre style="background:#1a1a1a;color:#00ff00;padding:20px;border-radius:8px;">';
+        foreach ($vars as $var) {
+            var_dump($var);
+        }
+        echo '</pre>';
+        die();
+    }
 }

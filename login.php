@@ -24,10 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Format email tidak valid');
         }
 
-        // Check login attempts
+        // Check login attempts (rate limiting)
         checkLoginAttempts($email);
 
-        // Query user dari database
+        // Query user dari database dengan prepared statement
         $db = Database::getInstance();
         $sql = "SELECT id_pengguna, nama, email, password, role, status_akun 
                 FROM pengguna 
@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Check status akun
             if ($user['status_akun'] !== 'aktif') {
+                recordLoginAttempt($email, false);
                 throw new Exception('Akun Anda telah dinonaktifkan');
             }
 
@@ -48,6 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (verifyPassword($password, $user['password'])) {
                 // Login berhasil
                 recordLoginAttempt($email, true);
+
+                // Check if password needs rehashing
+                rehashPasswordIfNeeded($user['id_pengguna'], $password, $user['password']);
+
+                // Login user
                 login($user['id_pengguna'], $user['nama'], $user['email'], $user['role']);
 
                 // Redirect berdasarkan role
@@ -56,7 +62,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($user['role'] === 'kasir') {
                     redirect(APP_URL . '/kasir/dashboard_kasir.php');
                 } else {
-                    redirect(APP_URL . '/dashboard.php');
+                    // Unknown role
+                    logout();
+                    throw new Exception('Role tidak dikenali');
                 }
             } else {
                 // Password salah
@@ -108,6 +116,19 @@ $flash = getFlash();
             overflow: hidden;
             max-width: 400px;
             width: 100%;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .login-header {
@@ -136,6 +157,23 @@ $flash = getFlash();
             border-radius: 8px;
             margin-bottom: 20px;
             font-size: 14px;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
         }
 
         .alert-error {
@@ -211,6 +249,11 @@ $flash = getFlash();
             transform: translateY(0);
         }
 
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .login-footer {
             text-align: center;
             margin-top: 20px;
@@ -240,6 +283,7 @@ $flash = getFlash();
             transform: translateY(-50%);
             cursor: pointer;
             color: #9ca3af;
+            transition: color 0.3s;
         }
 
         .password-toggle:hover {
@@ -262,7 +306,7 @@ $flash = getFlash();
                 </div>
             <?php endif; ?>
 
-            <form method="POST" action="">
+            <form method="POST" action="" id="loginForm">
                 <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
 
                 <div class="form-group">
@@ -275,7 +319,8 @@ $flash = getFlash();
                             class="form-control"
                             placeholder="nama@email.com"
                             value="<?= isset($_POST['email']) ? clean($_POST['email']) : '' ?>"
-                            required>
+                            required
+                            autocomplete="email">
                     </div>
                 </div>
 
@@ -288,12 +333,13 @@ $flash = getFlash();
                             name="password"
                             class="form-control"
                             placeholder="Masukkan password"
-                            required>
+                            required
+                            autocomplete="current-password">
                         <i class="fas fa-eye password-toggle" id="togglePassword"></i>
                     </div>
                 </div>
 
-                <button type="submit" class="btn">
+                <button type="submit" class="btn" id="submitBtn">
                     <i class="fas fa-sign-in-alt"></i> Login
                 </button>
             </form>
@@ -330,6 +376,13 @@ $flash = getFlash();
                 setTimeout(() => alert.remove(), 500);
             }
         }, 5000);
+
+        // Prevent double submit
+        document.getElementById('loginForm').addEventListener('submit', function() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+        });
     </script>
 </body>
 

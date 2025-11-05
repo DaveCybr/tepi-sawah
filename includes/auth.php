@@ -3,6 +3,7 @@
 /**
  * Authentication Middleware
  * Proteksi halaman dari akses unauthorized
+ * Version: 2.0.0 - Updated with standardized session keys
  */
 
 /**
@@ -18,8 +19,11 @@ function requireLogin()
     // Check session timeout
     if (!checkSessionTimeout()) {
         setFlash('error', 'Sesi Anda telah berakhir. Silakan login kembali');
-        redirect(APP_URL . '/login.php');
+        logout();
     }
+
+    // Check account status
+    checkAccountStatus();
 }
 
 /**
@@ -31,6 +35,7 @@ function requireRole($requiredRole)
 
     if (!hasRole($requiredRole)) {
         setFlash('error', 'Anda tidak memiliki akses ke halaman ini');
+        logActivity($_SESSION[SESSION_USER_ID], 'unauthorized_access', "Attempted to access $requiredRole page");
         redirect(APP_URL . '/unauthorized.php');
     }
 }
@@ -57,39 +62,52 @@ function requireKasir()
 function redirectIfLoggedIn()
 {
     if (isLoggedIn()) {
-        $role = $_SESSION['role'];
+        $role = $_SESSION[SESSION_USER_ROLE];
 
         if ($role === 'owner') {
             redirect(APP_URL . '/owner/inside/dashboard.php');
         } elseif ($role === 'kasir') {
             redirect(APP_URL . '/kasir/dashboard_kasir.php');
+        } else {
+            // Unknown role - logout for security
+            logout();
         }
     }
 }
 
 /**
- * Login user
+ * Login user dengan standardized session keys
+ * 
+ * @param int $userId
+ * @param string $nama
+ * @param string $email
+ * @param string $role
  */
 function login($userId, $nama, $email, $role)
 {
-    // Regenerate session ID untuk keamanan
+    // Regenerate session ID untuk keamanan (prevent session fixation)
     session_regenerate_id(true);
 
-    $_SESSION['user_id'] = $userId;
-    $_SESSION['nama'] = $nama;
-    $_SESSION['email'] = $email;
-    $_SESSION['role'] = $role;
-    $_SESSION['last_activity'] = time();
-    $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'];
-    $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
+    // Set session dengan standardized keys
+    $_SESSION[SESSION_USER_ID] = $userId;
+    $_SESSION[SESSION_USER_NAME] = $nama;
+    $_SESSION[SESSION_USER_EMAIL] = $email;
+    $_SESSION[SESSION_USER_ROLE] = $role;
+    $_SESSION[SESSION_LAST_ACTIVITY] = time();
+    $_SESSION['ip_address'] = $_SERVER['REMOTE_ADDR'] ?? '';
+    $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'] ?? '';
 
     // Log activity
-    logActivity($userId, 'login', 'User logged in');
+    logActivity($userId, 'login', 'User logged in from ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
 
     // Update last login di database
-    $db = Database::getInstance();
-    $sql = "UPDATE pengguna SET terakhir_login = NOW() WHERE id_pengguna = ?";
-    $db->execute($sql, 'i', [$userId]);
+    try {
+        $db = Database::getInstance();
+        $sql = "UPDATE pengguna SET terakhir_login = NOW() WHERE id_pengguna = ?";
+        $db->execute($sql, 'i', [$userId]);
+    } catch (Exception $e) {
+        error_log("Failed to update last login: " . $e->getMessage());
+    }
 }
 
 /**
@@ -98,7 +116,7 @@ function login($userId, $nama, $email, $role)
 function logout()
 {
     if (isLoggedIn()) {
-        logActivity($_SESSION['user_id'], 'logout', 'User logged out');
+        logActivity($_SESSION[SESSION_USER_ID], 'logout', 'User logged out');
     }
 
     // Hapus semua session
@@ -106,7 +124,16 @@ function logout()
 
     // Hapus session cookie
     if (isset($_COOKIE[session_name()])) {
-        setcookie(session_name(), '', time() - 3600, '/');
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 3600,
+            $params['path'],
+            $params['domain'],
+            $params['secure'],
+            $params['httponly']
+        );
     }
 
     // Destroy session
@@ -124,10 +151,19 @@ function verifyPassword($password, $hash)
 }
 
 /**
- * Hash password
+ * Hash password dengan konstanta dari config
  */
 function hashPassword($password)
 {
+    // Validate password length
+    if (strlen($password) < MIN_PASSWORD_LENGTH) {
+        throw new Exception('Password minimal ' . MIN_PASSWORD_LENGTH . ' karakter');
+    }
+
+    if (strlen($password) > MAX_PASSWORD_LENGTH) {
+        throw new Exception('Password maksimal ' . MAX_PASSWORD_LENGTH . ' karakter');
+    }
+
     return password_hash($password, HASH_ALGO, ['cost' => HASH_COST]);
 }
 
@@ -140,15 +176,24 @@ function getCurrentUser()
         return null;
     }
 
-    $db = Database::getInstance();
-    $sql = "SELECT id_pengguna, nama, email, role, status_akun FROM pengguna WHERE id_pengguna = ?";
-    $result = $db->query($sql, 'i', [$_SESSION['user_id']]);
+    try {
+        $db = Database::getInstance();
+        $sql = "SELECT id_pengguna, nama, email, role, status_akun, terakhir_login 
+                FROM pengguna 
+                WHERE id_pengguna = ? 
+                LIMIT 1";
 
-    if ($result && $result->num_rows > 0) {
-        return $result->fetch_assoc();
+        $result = $db->query($sql, 'i', [$_SESSION[SESSION_USER_ID]]);
+
+        if ($result && $result->num_rows > 0) {
+            return $result->fetch_assoc();
+        }
+
+        return null;
+    } catch (Exception $e) {
+        error_log("Get current user error: " . $e->getMessage());
+        return null;
     }
-
-    return null;
 }
 
 /**
@@ -158,9 +203,63 @@ function checkAccountStatus()
 {
     $user = getCurrentUser();
 
-    if (!$user || $user['status_akun'] !== 'aktif') {
+    if (!$user) {
+        logout();
+        setFlash('error', 'Akun tidak ditemukan');
+        redirect(APP_URL . '/login.php');
+    }
+
+    if ($user['status_akun'] !== 'aktif') {
         logout();
         setFlash('error', 'Akun Anda telah dinonaktifkan');
         redirect(APP_URL . '/login.php');
     }
+}
+
+/**
+ * Verify CSRF and check if user is logged in (untuk API endpoints)
+ */
+function requireAuthAPI()
+{
+    if (!isLoggedIn()) {
+        jsonResponse(false, 'Unauthorized', null, 401);
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'PUT' || $_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+
+        if (!verifyCSRFToken($token)) {
+            jsonResponse(false, 'Invalid CSRF token', null, 403);
+        }
+    }
+}
+
+/**
+ * Check if password needs rehashing (untuk security upgrade)
+ */
+function needsRehash($hash)
+{
+    return password_needs_rehash($hash, HASH_ALGO, ['cost' => HASH_COST]);
+}
+
+/**
+ * Rehash password jika algoritma berubah
+ */
+function rehashPasswordIfNeeded($userId, $password, $currentHash)
+{
+    if (needsRehash($currentHash)) {
+        try {
+            $newHash = hashPassword($password);
+            $db = Database::getInstance();
+            $sql = "UPDATE pengguna SET password = ? WHERE id_pengguna = ?";
+            $db->execute($sql, 'si', [$newHash, $userId]);
+
+            logActivity($userId, 'password_rehash', 'Password rehashed with new algorithm');
+            return true;
+        } catch (Exception $e) {
+            error_log("Password rehash failed: " . $e->getMessage());
+            return false;
+        }
+    }
+    return false;
 }
