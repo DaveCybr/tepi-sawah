@@ -285,7 +285,7 @@ $statistik = $pembayaranModel->getStatistik($tanggal);
                                     </td>
                                     <td><?= ucfirst($trx['jenis_pesanan']) ?></td>
                                     <td style="text-align: right; font-weight: 600; color: #10b981;">
-                                        <?= rupiah($trx['jumlah_dibayar']) ?>
+                                        <?= rupiah($trx['jumlah_tagihan']) ?>
                                     </td>
                                     <td style="text-align: center;">
                                         <a href="struk.php?id=<?= $trx['id_pembayaran'] ?>"

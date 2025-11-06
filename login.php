@@ -50,9 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Login berhasil
                 recordLoginAttempt($email, true);
 
-                // Check if password needs rehashing
-                rehashPasswordIfNeeded($user['id_pengguna'], $password, $user['password']);
-
                 // Login user
                 login($user['id_pengguna'], $user['nama'], $user['email'], $user['role']);
 
@@ -202,29 +199,61 @@ $flash = getFlash();
 
         .input-group {
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
-        .input-group i {
+        .input-icon {
             position: absolute;
             left: 15px;
             top: 50%;
             transform: translateY(-50%);
             color: #9ca3af;
+            z-index: 1;
+            pointer-events: none;
         }
 
         .form-control {
             width: 100%;
-            padding: 12px 15px 12px 45px;
+            padding: 13px 50px 13px 45px;
             border: 2px solid #e5e7eb;
             border-radius: 10px;
             font-size: 14px;
             transition: all 0.3s;
+            background: white;
         }
 
         .form-control:focus {
             outline: none;
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #9ca3af;
+            transition: all 0.3s;
+            z-index: 2;
+            padding: 8px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+        }
+
+        .password-toggle:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .password-toggle:active {
+            transform: translateY(-50%) scale(0.9);
         }
 
         .btn {
@@ -237,7 +266,7 @@ $flash = getFlash();
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.3s;
         }
 
         .btn:hover {
@@ -252,6 +281,7 @@ $flash = getFlash();
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
 
         .login-footer {
@@ -263,31 +293,39 @@ $flash = getFlash();
 
         .login-footer p {
             color: #6b7280;
-            font-size: 14px;
+            font-size: 13px;
         }
 
-        .login-footer a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
         }
 
-        .login-footer a:hover {
-            text-decoration: underline;
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
-        .password-toggle {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #9ca3af;
-            transition: color 0.3s;
-        }
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-header {
+                padding: 30px 20px;
+            }
 
-        .password-toggle:hover {
-            color: #667eea;
+            .login-header h1 {
+                font-size: 24px;
+            }
+
+            .login-body {
+                padding: 30px 20px;
+            }
         }
     </style>
 </head>
@@ -302,6 +340,7 @@ $flash = getFlash();
         <div class="login-body">
             <?php if ($flash): ?>
                 <div class="alert alert-<?= $flash['type'] ?>">
+                    <i class="fas fa-<?= $flash['type'] === 'error' ? 'exclamation-circle' : 'check-circle' ?>"></i>
                     <?= $flash['message'] ?>
                 </div>
             <?php endif; ?>
@@ -310,9 +349,11 @@ $flash = getFlash();
                 <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
 
                 <div class="form-group">
-                    <label for="email">Email</label>
+                    <label for="email">
+                        Email
+                    </label>
                     <div class="input-group">
-                        <i class="fas fa-envelope"></i>
+                        <i class="fas fa-envelope input-icon"></i>
                         <input type="email"
                             id="email"
                             name="email"
@@ -320,14 +361,17 @@ $flash = getFlash();
                             placeholder="nama@email.com"
                             value="<?= isset($_POST['email']) ? clean($_POST['email']) : '' ?>"
                             required
-                            autocomplete="email">
+                            autocomplete="email"
+                            autofocus>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">
+                        Password
+                    </label>
                     <div class="input-group">
-                        <i class="fas fa-lock"></i>
+                        <i class="fas fa-lock input-icon"></i>
                         <input type="password"
                             id="password"
                             name="password"
@@ -335,7 +379,9 @@ $flash = getFlash();
                             placeholder="Masukkan password"
                             required
                             autocomplete="current-password">
-                        <i class="fas fa-eye password-toggle" id="togglePassword"></i>
+                        <i class="fas fa-eye password-toggle"
+                            id="togglePassword"
+                            title="Tampilkan/Sembunyikan Password"></i>
                     </div>
                 </div>
 
@@ -345,26 +391,32 @@ $flash = getFlash();
             </form>
 
             <div class="login-footer">
-                <p>Belum punya akun? <a href="register.php">Daftar di sini</a></p>
+                <p>
+                    <i class="fas fa-info-circle"></i>
+                    Hubungi admin untuk mendapatkan akses
+                </p>
             </div>
         </div>
     </div>
 
     <script>
         // Toggle password visibility
-        document.getElementById('togglePassword').addEventListener('click', function() {
-            const password = document.getElementById('password');
-            const icon = this;
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
 
-            if (password.type === 'password') {
-                password.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                password.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
-            }
+        togglePassword.addEventListener('click', function() {
+            // Toggle type
+            const type = passwordInput.type === 'password' ? 'text' : 'password';
+            passwordInput.type = type;
+
+            // Toggle icon
+            this.classList.toggle('fa-eye');
+            this.classList.toggle('fa-eye-slash');
+
+            // Change title
+            this.title = type === 'password' ?
+                'Tampilkan Password' :
+                'Sembunyikan Password';
         });
 
         // Clear flash message after 5 seconds
@@ -377,11 +429,26 @@ $flash = getFlash();
             }
         }, 5000);
 
-        // Prevent double submit
-        document.getElementById('loginForm').addEventListener('submit', function() {
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+        // Prevent double submit with loading state
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        loginForm.addEventListener('submit', function() {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="spinner"></div> Memproses...';
+        });
+
+        // Auto-enable button jika ada error (halaman reload)
+        window.addEventListener('load', function() {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+        });
+
+        // Keyboard shortcut: Enter to submit
+        passwordInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loginForm.submit();
+            }
         });
     </script>
 </body>
